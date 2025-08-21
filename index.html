@@ -1,0 +1,98 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DFA Simulator</title>
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Mobile DFA Simulator</h1>
+            <p>Create and test deterministic finite automata</p>
+        </div>
+        
+        <div class="controls">
+            <button class="btn btn-primary" onclick="setMode('state')">Add State</button>
+            <button class="btn btn-primary" onclick="setMode('transition')">Add Transition</button>
+            <button class="btn btn-secondary" onclick="setMode('move')">Move</button>
+            <button class="btn btn-success" onclick="setStartState()">Set Start</button>
+            <button class="btn btn-success" onclick="toggleFinalState()">Toggle Final</button>
+            <button class="btn btn-danger" onclick="deleteSelected()">Delete</button>
+            <button class="btn btn-danger" onclick="clearAll()">Clear All</button>
+        </div>
+        
+        <div class="canvas-container">
+            <canvas id="canvas"></canvas>
+            <div class="mode-indicator" id="modeIndicator">Mode: Add State</div>
+        </div>
+        
+        <div class="test-panel">
+            <div class="test-tabs">
+                <button class="tab-btn active" onclick="switchTab('single')">Single Test</button>
+                <button class="tab-btn" onclick="switchTab('bulk')">Bulk Test</button>
+            </div>
+            
+            <div id="single-test" class="tab-content active">
+                <div class="input-group">
+                    <input type="text" class="input-field" id="testInput" placeholder="Enter string to test (e.g., 101)" maxlength="50">
+                    <button class="btn btn-primary" onclick="testString()">Test</button>
+                    <button class="btn btn-secondary" onclick="startStepDebug()">Step Debug</button>
+                </div>
+                <div id="result"></div>
+                
+                <div id="stepDebugger" class="step-debugger" style="display: none;">
+                    <h4>Step-by-Step Debugging</h4>
+                    <div class="debug-controls">
+                        <button class="btn btn-primary" onclick="stepNext()">Next Step</button>
+                        <button class="btn btn-secondary" onclick="stepPrev()">Previous</button>
+                        <button class="btn btn-danger" onclick="resetDebug()">Reset</button>
+                    </div>
+                    <div id="debugInfo" class="debug-info"></div>
+                </div>
+            </div>
+            
+            <div id="bulk-test" class="tab-content">
+                <div class="bulk-test-section">
+                    <h4>Accept (one per line):</h4>
+                    <textarea class="textarea-field" id="acceptInput" placeholder="111&#10;1100&#10;10101&#10;&#10;(Empty line for empty string)"></textarea>
+                </div>
+                
+                <div class="bulk-test-section">
+                    <h4>Reject (one per line):</h4>
+                    <textarea class="textarea-field" id="rejectInput" placeholder="0&#10;1&#10;100&#10;010&#10;11011"></textarea>
+                </div>
+                
+                <div class="input-group">
+                    <button class="btn btn-primary" onclick="runBulkTest()" style="width: 100%;">Run Bulk Test</button>
+                </div>
+                
+                <div id="bulkResults"></div>
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <h3>How to use:</h3>
+            <ul>
+                <li><strong>Add State:</strong> Tap empty area to create states</li>
+                <li><strong>Add Transition:</strong> Tap source state, then target state, enter symbol</li>
+                <li><strong>Move:</strong> Drag states to reposition them</li>
+                <li><strong>Rename State:</strong> Double-click a state to change its label</li>
+                <li><strong>Edit Transition:</strong> Double-click a transition to modify its symbol</li>
+                <li><strong>Set Start:</strong> Select a state and tap "Set Start"</li>
+                <li><strong>Toggle Final:</strong> Select a state to make it accepting</li>
+                <li><strong>Single Test:</strong> Enter a string and see if it's accepted</li>
+                <li><strong>Step Debug:</strong> See the DFA execution step by step</li>
+                <li><strong>Bulk Test:</strong> Test multiple strings at once with expected results</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+
+</body>
+</html>
