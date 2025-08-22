@@ -36,6 +36,27 @@ class DFASimulator {
         this.setupEventListeners();
         this.draw();
     }
+
+    // Get current theme colors from CSS variables
+    getThemeColors() {
+        const root = document.documentElement;
+        const computedStyle = getComputedStyle(root);
+        
+        return {
+            bgPrimary: computedStyle.getPropertyValue('--bg-primary').trim(),
+            bgSecondary: computedStyle.getPropertyValue('--bg-secondary').trim(),
+            textPrimary: computedStyle.getPropertyValue('--text-primary').trim(),
+            textSecondary: computedStyle.getPropertyValue('--text-secondary').trim(),
+            accent: computedStyle.getPropertyValue('--accent').trim(),
+            accent2: computedStyle.getPropertyValue('--accent2').trim(),
+            success: computedStyle.getPropertyValue('--success').trim(),
+            info: computedStyle.getPropertyValue('--info').trim(),
+            danger: computedStyle.getPropertyValue('--danger').trim(),
+            border: computedStyle.getPropertyValue('--border').trim(),
+            shadow: computedStyle.getPropertyValue('--shadow').trim(),
+            isLightMode: root.classList.contains('light-mode')
+        };
+    }
     
     setupCanvas() {
         const rect = this.canvas.getBoundingClientRect();
@@ -944,7 +965,8 @@ class DFASimulator {
         
         // Draw transition source indicator
         if (this.transitionSource) {
-            this.ctx.strokeStyle = '#ff6b6b';
+            const colors = this.getThemeColors();
+            this.ctx.strokeStyle = colors.danger;
             this.ctx.lineWidth = 4;
             this.ctx.setLineDash([8, 4]);
             this.ctx.beginPath();
@@ -956,6 +978,7 @@ class DFASimulator {
     
     drawState(state) {
         const radius = 30;
+        const colors = this.getThemeColors();
         
         // Highlight current debug state
         let isDebugState = false;
@@ -965,41 +988,49 @@ class DFASimulator {
         }
         
         const isHovered = this.hoveredState === state;
+        const isSelected = state === this.selectedState;
+        const isStartState = state === this.startState;
         
         this.ctx.beginPath();
         this.ctx.arc(state.x, state.y, radius, 0, 2 * Math.PI);
         
-        // Fill with appropriate color
+        // Fill with appropriate color based on theme
         if (isDebugState) {
-            this.ctx.fillStyle = '#ffc107'; // Debug highlight
-        } else if (state === this.selectedState) {
-            this.ctx.fillStyle = '#007bff';
-        } else if (state === this.startState) {
-            this.ctx.fillStyle = '#f8f9fa';
+            this.ctx.fillStyle = colors.accent; // Debug highlight
+        } else if (isSelected) {
+            this.ctx.fillStyle = colors.info;
+        } else if (isStartState) {
+            this.ctx.fillStyle = colors.bgSecondary;
         } else if (isHovered && this.mode === 'move') {
-            this.ctx.fillStyle = '#e3f2fd'; // Light hover color
+            // Light hover color with theme awareness
+            this.ctx.fillStyle = colors.isLightMode ? '#e3f2fd' : '#1a2332';
         } else {
-            this.ctx.fillStyle = '#f8f9fa';
+            this.ctx.fillStyle = colors.bgSecondary;
         }
         this.ctx.fill();
         
-        // Border
-        this.ctx.strokeStyle = isDebugState ? '#ff6600' : '#2c3e50';
-        this.ctx.lineWidth = isDebugState ? 4 : 2.5;
+        // Border with theme colors
+        if (isDebugState) {
+            this.ctx.strokeStyle = colors.accent2;
+            this.ctx.lineWidth = 4;
+        } else {
+            this.ctx.strokeStyle = colors.textPrimary;
+            this.ctx.lineWidth = 2.5;
+        }
         this.ctx.stroke();
         
         // Double circle for final states
         if (state.isFinal) {
-            this.ctx.strokeStyle = isDebugState ? '#ff6600' : '#2c3e50';
+            this.ctx.strokeStyle = isDebugState ? colors.accent2 : colors.textPrimary;
             this.ctx.lineWidth = isDebugState ? 3 : 2;
             this.ctx.beginPath();
             this.ctx.arc(state.x, state.y, radius - 6, 0, 2 * Math.PI);
             this.ctx.stroke();
         }
         
-        // Start state arrow
+        // Start state arrow with theme colors
         if (state === this.startState) {
-            this.ctx.strokeStyle = '#2c3e50';
+            this.ctx.strokeStyle = colors.textPrimary;
             this.ctx.lineWidth = 4;
             this.ctx.beginPath();
             
@@ -1016,8 +1047,12 @@ class DFASimulator {
             this.ctx.stroke();
         }
         
-        // Label
-        this.ctx.fillStyle = (state === this.selectedState || isDebugState) ? 'white' : '#2c3e50';
+        // Label with theme-aware colors
+        if (isSelected || isDebugState) {
+            this.ctx.fillStyle = colors.isLightMode ? 'white' : colors.bgPrimary;
+        } else {
+            this.ctx.fillStyle = colors.textPrimary;
+        }
         this.ctx.font = 'bold 16px sans-serif';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
@@ -1027,6 +1062,7 @@ class DFASimulator {
     drawTransition(transition) {
         const from = transition.from;
         const to = transition.to;
+        const colors = this.getThemeColors();
         
         // Check if this is the current debug transition
         let isDebugTransition = false;
@@ -1064,11 +1100,11 @@ class DFASimulator {
         const endX = to.x - unitX * radius;
         const endY = to.y - unitY * radius;
         
-        // Color based on state
-        let strokeColor = '#2c3e50';
-        if (isDebugTransition) strokeColor = '#ffc107';
-        else if (isSelected) strokeColor = '#ff6b6b';
-        else if (isHovered) strokeColor = '#ff6b6b';
+        // Color based on state with theme colors
+        let strokeColor = colors.textPrimary;
+        if (isDebugTransition) strokeColor = colors.accent;
+        else if (isSelected) strokeColor = colors.danger;
+        else if (isHovered) strokeColor = colors.danger;
         
         this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = (isSelected || isHovered || isDebugTransition) ? 3.5 : 2.5;
@@ -1097,6 +1133,7 @@ class DFASimulator {
         const to = transition.to;
         const offsetDistance = transition.offset || 0;
         const offsetDirection = transition.offsetDirection || 0;
+        const colors = this.getThemeColors();
         
         const dx = to.x - from.x;
         const dy = to.y - from.y;
@@ -1116,11 +1153,11 @@ class DFASimulator {
         const endX = to.x - unitX * radius + perpX;
         const endY = to.y - unitY * radius + perpY;
         
-        // Color based on state
-        let strokeColor = '#2c3e50';
-        if (isDebugTransition) strokeColor = '#ffc107';
-        else if (isSelected) strokeColor = '#ff6b6b';
-        else if (isHovered) strokeColor = '#ff6b6b';
+        // Color based on state with theme colors
+        let strokeColor = colors.textPrimary;
+        if (isDebugTransition) strokeColor = colors.accent;
+        else if (isSelected) strokeColor = colors.danger;
+        else if (isHovered) strokeColor = colors.danger;
         
         this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = (isSelected || isHovered || isDebugTransition) ? 3.5 : 2.5;
@@ -1165,6 +1202,8 @@ class DFASimulator {
     drawTransitionLabel(text, x, y, isHighlighted) {
         if (!this.showLabels) return;
         
+        const colors = this.getThemeColors();
+        
         this.ctx.font = '14px sans-serif';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
@@ -1174,14 +1213,25 @@ class DFASimulator {
         const bgWidth = metrics.width + padding * 2;
         const bgHeight = 20;
         
-        this.ctx.fillStyle = isHighlighted ? 'rgba(255, 193, 7, 0.9)' : 'rgba(255, 255, 255, 0.95)';
-        this.ctx.strokeStyle = isHighlighted ? '#ffc107' : '#2c3e50';
+        // Background and border colors based on theme and highlight state
+        if (isHighlighted) {
+            this.ctx.fillStyle = colors.isLightMode ? 'rgba(193, 132, 1, 0.9)' : 'rgba(255, 193, 7, 0.9)';
+            this.ctx.strokeStyle = colors.accent;
+        } else {
+            this.ctx.fillStyle = colors.isLightMode ? 'rgba(255, 255, 255, 0.95)' : 'rgba(40, 44, 52, 0.95)';
+            this.ctx.strokeStyle = colors.textPrimary;
+        }
         this.ctx.lineWidth = isHighlighted ? 2 : 1.5;
         
         this.ctx.fillRect(x - bgWidth/2, y - bgHeight/2, bgWidth, bgHeight);
         this.ctx.strokeRect(x - bgWidth/2, y - bgHeight/2, bgWidth, bgHeight);
         
-        this.ctx.fillStyle = isHighlighted ? '#000' : '#2c3e50';
+        // Text color based on theme and highlight state
+        if (isHighlighted) {
+            this.ctx.fillStyle = colors.isLightMode ? 'white' : '#000';
+        } else {
+            this.ctx.fillStyle = colors.textPrimary;
+        }
         this.ctx.fillText(text, x, y);
     }
     
@@ -1189,6 +1239,7 @@ class DFASimulator {
         const radius = 30;
         const loopRadius = 20;
         const loopDistance = 45;
+        const colors = this.getThemeColors();
         
         // Use stored angle or default to top
         const angle = transition.selfLoopAngle || -Math.PI/2;
@@ -1196,11 +1247,11 @@ class DFASimulator {
         const loopCenterX = state.x + Math.cos(angle) * loopDistance;
         const loopCenterY = state.y + Math.sin(angle) * loopDistance;
         
-        // Color based on state
-        let strokeColor = '#2c3e50';
-        if (isDebugTransition) strokeColor = '#ffc107';
-        else if (isSelected) strokeColor = '#ff6b6b';
-        else if (isHovered) strokeColor = '#ff6b6b';
+        // Color based on state with theme colors
+        let strokeColor = colors.textPrimary;
+        if (isDebugTransition) strokeColor = colors.accent;
+        else if (isSelected) strokeColor = colors.danger;
+        else if (isHovered) strokeColor = colors.danger;
         
         this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = (isSelected || isHovered || isDebugTransition) ? 3.5 : 2.5;
@@ -1336,6 +1387,41 @@ function scrollToInstructions() {
     });
 }
 
+// Theme Toggle Functionality
+function toggleTheme() {
+    const root = document.documentElement;
+    const themeToggle = document.querySelector('.theme-toggle');
+    
+    if (root.classList.contains('light-mode')) {
+        root.classList.remove('light-mode');
+        themeToggle.textContent = '🌓';
+        localStorage.setItem('theme', 'dark');
+    } else {
+        root.classList.add('light-mode');
+        themeToggle.textContent = '🌞';
+        localStorage.setItem('theme', 'light');
+    }
+    
+    // Redraw canvas with new theme colors
+    if (simulator) {
+        simulator.draw();
+    }
+}
+
+// Initialize theme from localStorage
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('theme');
+    const root = document.documentElement;
+    const themeToggle = document.querySelector('.theme-toggle');
+    
+    if (savedTheme === 'light') {
+        root.classList.add('light-mode');
+        themeToggle.textContent = '🌞';
+    } else {
+        themeToggle.textContent = '🌓';
+    }
+}
+
 function runBulkTest() {
     if (!simulator.startState) {
         alert('No start state defined!');
@@ -1427,6 +1513,8 @@ function displayBulkResults(results, passed, total) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    initializeTheme();
+
     const testInput = document.getElementById('testInput');
     if (testInput) {
         testInput.addEventListener('keypress', (e) => {
