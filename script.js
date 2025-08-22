@@ -17,6 +17,9 @@ class DFASimulator {
         this.lastClickTime = 0;
         this.lastClickTarget = null;
         this.doubleClickDelay = 300;
+        this.showLabels = true;
+        this.draggingLabel = null;
+        this.draggingSelfLoop = null;
         
         // Step debugging
         this.debugMode = false;
@@ -100,6 +103,8 @@ class DFASimulator {
     handleDown(x, y) {
         const clickedState = this.getStateAt(x, y);
         const clickedTransition = this.getTransitionAt(x, y);
+        const clickedLabel = this.getLabelAt(x, y);
+        const clickedSelfLoop = this.getSelfLoopAt(x, y);
         const currentTime = Date.now();
         
         // Check for double click
@@ -118,6 +123,8 @@ class DFASimulator {
         
         // Reset selections
         this.selectedTransition = null;
+        this.draggingLabel = null;
+        this.draggingSelfLoop = null;
         
         if (this.mode === 'state') {
             if (!clickedState) {
@@ -135,7 +142,11 @@ class DFASimulator {
                 }
             }
         } else if (this.mode === 'move') {
-            if (clickedTransition) {
+            if (clickedLabel) {
+                this.draggingLabel = clickedLabel;
+            } else if (clickedSelfLoop) {
+                this.draggingSelfLoop = clickedSelfLoop;
+            } else if (clickedTransition) {
                 this.selectedTransition = clickedTransition;
             } else if (clickedState) {
                 this.selectedState = clickedState;
@@ -153,11 +164,19 @@ class DFASimulator {
             this.selectedState.x = x - this.dragOffset.x;
             this.selectedState.y = y - this.dragOffset.y;
             this.draw();
+        } else if (this.draggingLabel && this.mode === 'move') {
+            this.moveLabelAlongTransition(this.draggingLabel, x, y);
+            this.draw();
+        } else if (this.draggingSelfLoop && this.mode === 'move') {
+            this.moveSelfLoop(this.draggingSelfLoop, x, y);
+            this.draw();
         }
     }
     
     handleUp() {
         this.isDragging = false;
+        this.draggingLabel = null;
+        this.draggingSelfLoop = null;
     }
     
     addState(x, y) {
@@ -191,12 +210,21 @@ class DFASimulator {
             );
             
             if (!existing) {
-                this.transitions.push({
+                const transition = {
                     id: Date.now() + Math.random(),
                     from: from,
                     to: to,
                     symbol: symbol
-                });
+                };
+
+                // Add label position properties for self-loops
+                if (from.id === to.id) {
+                    transition.selfLoopAngle = -Math.PI/2; // Default to top
+                } else {
+                    transition.labelOffset = 0.5; // Default to middle of transition
+                }
+
+                this.transitions.push(transition);
             } else {
                 alert('This transition already exists!');
             }
@@ -211,6 +239,200 @@ class DFASimulator {
             return Math.sqrt(dx * dx + dy * dy) <= radius;
         });
     }
+
+    getLabelAt(x, y) {
+        if (!this.showLabels) return null;
+
+        const tolerance = 15;
+        
+        for (let transition of this.transitions) {
+            if (transition.from.id === transition.to.id) {
+                // Self-loop label
+                const state = transition.from;
+                const angle = transition.selfLoopAngle || -Math.PI/2;
+                const loopDistance = 55;
+                const labelDistance = 80;
+                
+                const labelX = state.x + Math.cos(angle) * labelDistance;
+                const labelY = state.y + Math.sin(angle) * labelDistance;
+                
+                const dx = x - labelX;
+                const dy = y - labelY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < tolerance) {
+                    return { transition: transition, type: 'selfLoop' };
+                }
+            } else {
+                // Regular transition label
+                const from = transition.from;
+                const to = transition.to;
+                const dx = to.x - from.x;
+                const dy = to.y - from.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < 10) continue;
+                
+                const unitX = dx / distance;
+                const unitY = dy / distance;
+                const radius = 30;
+                const startX = from.x + unitX * radius;
+                const startY = from.y + unitY * radius;
+                const endX = to.x - unitX * radius;
+                const endY = to.y - unitY * radius;
+                
+                // Calculate label position based on transition type and offset
+                let labelX, labelY;
+                
+                // Check if this is a curved or straight transition
+                const allTransitions = this.transitions.filter(t => 
+                    (t.from.id === from.id && t.to.id === to.id) ||
+                    (t.from.id === to.id && t.to.id === from.id)
+                );
+                const sameDirectionTransitions = this.transitions.filter(t => 
+                    t.from.id === from.id && t.to.id === to.id
+                );
+                const hasBidirectional = allTransitions.length > sameDirectionTransitions.length;
+                
+                if (hasBidirectional || sameDirectionTransitions.length > 1) {
+                    // Curved transition
+                    const transitionIndex = sameDirectionTransitions.indexOf(transition);
+                    const curveOffset = (transitionIndex + 1) * 30;
+                    const perpX = -unitY;
+                    const perpY = unitX;
+                    
+                    const midX = (startX + endX) / 2;
+                    const midY = (startY + endY) / 2;
+                    const controlX = midX + perpX * curveOffset;
+                    const controlY = midY + perpY * curveOffset;
+                    
+                    const t = transition.labelOffset || 0.5;
+                    labelX = (1-t)*(1-t)*startX + 2*(1-t)*t*controlX + t*t*endX;
+                    labelY = (1-t)*(1-t)*startY + 2*(1-t)*t*controlY + t*t*endY;
+                } else {
+                    // Straight line transition
+                    const t = transition.labelOffset || 0.5;
+                    labelX = startX + (endX - startX) * t;
+                    labelY = startY + (endY - startY) * t;
+                }
+                
+                const labelDx = x - labelX;
+                const labelDy = y - labelY;
+                const labelDistance = Math.sqrt(labelDx * labelDx + labelDy * labelDy);
+                
+                if (labelDistance < tolerance) {
+                    return { transition: transition, type: 'regular' };
+                }
+            }
+        }
+        return null;
+    }
+
+    getSelfLoopAt(x, y) {
+        const tolerance = 15;
+        
+        for (let transition of this.transitions) {
+            if (transition.from.id === transition.to.id) {
+                const state = transition.from;
+                const angle = transition.selfLoopAngle || -Math.PI/2;
+                const loopRadius = 25;
+                const loopDistance = 55;
+                
+                const loopCenterX = state.x + Math.cos(angle) * loopDistance;
+                const loopCenterY = state.y + Math.sin(angle) * loopDistance;
+                
+                const dx = x - loopCenterX;
+                const dy = y - loopCenterY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (Math.abs(distance - loopRadius) < tolerance) {
+                    return transition;
+                }
+            }
+        }
+        return null;
+    }
+
+    moveLabelAlongTransition(labelInfo, x, y) {
+        const transition = labelInfo.transition;
+        
+        if (labelInfo.type === 'regular' && transition.from.id !== transition.to.id) {
+            const from = transition.from;
+            const to = transition.to;
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < 10) return;
+            
+            const unitX = dx / distance;
+            const unitY = dy / distance;
+            const radius = 30;
+            const startX = from.x + unitX * radius;
+            const startY = from.y + unitY * radius;
+            const endX = to.x - unitX * radius;
+            const endY = to.y - unitY * radius;
+            
+            // Check if this is a curved transition
+            const allTransitions = this.transitions.filter(t => 
+                (t.from.id === from.id && t.to.id === to.id) ||
+                (t.from.id === to.id && t.to.id === from.id)
+            );
+            const sameDirectionTransitions = this.transitions.filter(t => 
+                t.from.id === from.id && t.to.id === to.id
+            );
+            const hasBidirectional = allTransitions.length > sameDirectionTransitions.length;
+            
+            if (hasBidirectional || sameDirectionTransitions.length > 1) {
+                // Curved transition - project onto curve
+                const transitionIndex = sameDirectionTransitions.indexOf(transition);
+                const curveOffset = (transitionIndex + 1) * 30;
+                const perpX = -unitY;
+                const perpY = unitX;
+                
+                const midX = (startX + endX) / 2;
+                const midY = (startY + endY) / 2;
+                const controlX = midX + perpX * curveOffset;
+                const controlY = midY + perpY * curveOffset;
+                
+                // Find closest point on curve
+                let closestT = 0.5;
+                let minDistance = Infinity;
+                
+                for (let t = 0; t <= 1; t += 0.01) {
+                    const curveX = (1-t)*(1-t)*startX + 2*(1-t)*t*controlX + t*t*endX;
+                    const curveY = (1-t)*(1-t)*startY + 2*(1-t)*t*controlY + t*t*endY;
+                    const dist = Math.sqrt((x - curveX)*(x - curveX) + (y - curveY)*(y - curveY));
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestT = t;
+                    }
+                }
+                
+                transition.labelOffset = closestT;
+            } else {
+                // Straight transition - project onto line
+                const lineVecX = endX - startX;
+                const lineVecY = endY - startY;
+                const mouseVecX = x - startX;
+                const mouseVecY = y - startY;
+                
+                const lineLength = Math.sqrt(lineVecX * lineVecX + lineVecY * lineVecY);
+                const projection = (mouseVecX * lineVecX + mouseVecY * lineVecY) / (lineLength * lineLength);
+                
+                // Clamp between 0 and 1
+                transition.labelOffset = Math.max(0, Math.min(1, projection));
+            }
+        }
+    }
+
+    moveSelfLoop(transition, x, y) {
+        const state = transition.from;
+        const dx = x - state.x;
+        const dy = y - state.y;
+        const angle = Math.atan2(dy, dx);
+        transition.selfLoopAngle = angle;
+    }
     
     getTransitionAt(x, y) {
         const tolerance = 15;
@@ -219,9 +441,7 @@ class DFASimulator {
             if (transition.from.id === transition.to.id) {
                 // Self-loop - improved detection
                 const state = transition.from;
-                const transitionsFromState = this.transitions.filter(t => t.from.id === state.id && t.to.id === state.id);
-                const transitionIndex = transitionsFromState.indexOf(transition);
-                const angle = -Math.PI/2 + (transitionIndex * Math.PI/6);
+                const angle = transition.selfLoopAngle || -Math.PI/2;
                 
                 const loopRadius = 25;
                 const loopDistance = 55;
@@ -236,7 +456,7 @@ class DFASimulator {
                     return transition;
                 }
             } else {
-                // Regular transition
+                // Regular transition - make straight lines for multiple transitions
                 const from = transition.from;
                 const to = transition.to;
                 const dx = to.x - from.x;
@@ -245,22 +465,21 @@ class DFASimulator {
                 
                 if (distance < 10) continue;
                 
+                const unitX = dx / distance;
+                const unitY = dy / distance;
+                const radius = 30;
+                const startX = from.x + unitX * radius;
+                const startY = from.y + unitY * radius;
+                const endX = to.x - unitX * radius;
+                const endY = to.y - unitY * radius;
+                
                 // Get all transitions between these two states
-                const allTransitions = this.transitions.filter(t => 
-                    (t.from.id === from.id && t.to.id === to.id) ||
-                    (t.from.id === to.id && t.to.id === from.id)
+                const sameDirectionTransitions = this.transitions.filter(t => 
+                    t.from.id === from.id && t.to.id === to.id
                 );
                 
-                if (allTransitions.length <= 1) {
+                if (sameDirectionTransitions.length <= 1) {
                     // Single transition - straight line
-                    const unitX = dx / distance;
-                    const unitY = dy / distance;
-                    const radius = 30;
-                    const startX = from.x + unitX * radius;
-                    const startY = from.y + unitY * radius;
-                    const endX = to.x - unitX * radius;
-                    const endY = to.y - unitY * radius;
-                    
                     const A = endY - startY;
                     const B = startX - endX;
                     const C = endX * startY - startX * endY;
@@ -275,7 +494,11 @@ class DFASimulator {
                         return transition;
                     }
                 } else {
-                    // Multiple transitions - curved
+                    // Multiple transitions or bidirectional - curved
+                    const allTransitions = this.transitions.filter(t => 
+                        (t.from.id === from.id && t.to.id === to.id) ||
+                        (t.from.id === to.id && t.to.id === from.id)
+                    );
                     const forwardTransitions = allTransitions.filter(t => t.from.id === from.id && t.to.id === to.id);
                     const transitionIndex = forwardTransitions.indexOf(transition);
                     
@@ -288,7 +511,7 @@ class DFASimulator {
                         const endX = to.x - unitX * radius;
                         const endY = to.y - unitY * radius;
                         
-                        const curveOffset = (transitionIndex + 1) * 25;
+                        const curveOffset = (transitionIndex + 1) * 30;
                         const perpX = -unitY;
                         const perpY = unitX;
                         
@@ -374,10 +597,17 @@ class DFASimulator {
     }
     
     deleteSelected() {
+        if (this.selectedTransition || this.selectedState) {
+            document.getElementById('deleteModal').style.display = 'block';
+        } else {
+            alert('Please select a state or transition first!');
+        }
+    }
+    
+    confirmDelete() {
         if (this.selectedTransition) {
             this.transitions = this.transitions.filter(t => t.id !== this.selectedTransition.id);
             this.selectedTransition = null;
-            this.draw();
         } else if (this.selectedState) {
             this.states = this.states.filter(s => s.id !== this.selectedState.id);
             this.transitions = this.transitions.filter(t => 
@@ -389,24 +619,38 @@ class DFASimulator {
             }
             
             this.selectedState = null;
-            this.draw();
-        } else {
-            alert('Please select a state or transition first!');
         }
+        
+        document.getElementById('deleteModal').style.display = 'none';
+        this.draw();
     }
     
     clearAll() {
-        if (confirm('Clear all states and transitions?')) {
-            this.states = [];
-            this.transitions = [];
-            this.selectedState = null;
-            this.selectedTransition = null;
-            this.startState = null;
-            this.transitionSource = null;
-            this.stateCounter = 0;
-            this.resetDebug();
-            this.draw();
+        document.getElementById('clearModal').style.display = 'block';
+    }
+    
+    confirmClearAll() {
+        this.states = [];
+        this.transitions = [];
+        this.selectedState = null;
+        this.selectedTransition = null;
+        this.startState = null;
+        this.transitionSource = null;
+        this.stateCounter = 0;
+        this.resetDebug();
+        document.getElementById('clearModal').style.display = 'none';
+        this.draw();
+    }
+
+    toggleLabels() {
+        this.showLabels = !this.showLabels;
+        const toggle = document.getElementById('labelToggle');
+        if (this.showLabels) {
+            toggle.classList.add('active');
+        } else {
+            toggle.classList.remove('active');
         }
+        this.draw();
     }
     
     testString() {
@@ -696,10 +940,14 @@ class DFASimulator {
         const endX = to.x - unitX * radius;
         const endY = to.y - unitY * radius;
         
-        // Get all transitions between these states for proper spacing
+        // Get all transitions between these two states (both directions)
         const allTransitions = this.transitions.filter(t => 
             (t.from.id === from.id && t.to.id === to.id) ||
             (t.from.id === to.id && t.to.id === from.id)
+        );
+        
+        const sameDirectionTransitions = this.transitions.filter(t => 
+            t.from.id === from.id && t.to.id === to.id
         );
         
         // Color based on state
@@ -711,15 +959,27 @@ class DFASimulator {
         this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = (isSelected || isHovered || isDebugTransition) ? 3.5 : 2.5;
         
-        if (allTransitions.length > 1) {
+        // Check if there are bidirectional transitions
+        const hasBidirectional = allTransitions.length > sameDirectionTransitions.length;
+        
+        if (sameDirectionTransitions.length > 1 && !hasBidirectional) {
+            // Multiple transitions in same direction only - use parallel lines
+            this.drawParallelTransition(startX, startY, endX, endY, unitX, unitY, transition, from, to, isSelected || isHovered || isDebugTransition);
+        } else if (hasBidirectional || sameDirectionTransitions.length > 1) {
+            // Bidirectional or multiple transitions - use curves
             this.drawCurvedTransition(startX, startY, endX, endY, unitX, unitY, distance, transition, from, to, isSelected || isHovered || isDebugTransition);
         } else {
-            this.drawStraightTransition(startX, startY, endX, endY, dx, dy, transition.symbol, isSelected || isHovered || isDebugTransition);
+            // Single transition - straight line
+            this.drawStraightTransition(startX, startY, endX, endY, dx, dy, transition, isSelected || isHovered || isDebugTransition);
         }
     }
     
     drawCurvedTransition(startX, startY, endX, endY, unitX, unitY, distance, transition, from, to, isHighlighted) {
-        // Get transitions in the same direction for proper curve offset
+        // Get all transitions between these two states for proper curve offset
+        const allTransitions = this.transitions.filter(t => 
+            (t.from.id === from.id && t.to.id === to.id) ||
+            (t.from.id === to.id && t.to.id === from.id)
+        );
         const forwardTransitions = this.transitions.filter(t => t.from.id === from.id && t.to.id === to.id);
         const transitionIndex = forwardTransitions.indexOf(transition);
         
@@ -730,7 +990,7 @@ class DFASimulator {
         
         const perpX = -unitY;
         const perpY = unitX;
-        const curveOffset = (transitionIndex + 1) * 25;
+        const curveOffset = (transitionIndex + 1) * 30;
         
         const controlX = midX + perpX * curveOffset;
         const controlY = midY + perpY * curveOffset;
@@ -752,14 +1012,50 @@ class DFASimulator {
         this.drawArrowhead(endX, endY, arrowAngle, isHighlighted);
         
         // Draw label on the curve
-        const labelT = 0.5;
-        const labelX = (1-labelT)*(1-labelT)*startX + 2*(1-labelT)*labelT*controlX + labelT*labelT*endX;
-        const labelY = (1-labelT)*(1-labelT)*startY + 2*(1-labelT)*labelT*controlY + labelT*labelT*endY;
-        
-        this.drawTransitionLabel(transition.symbol, labelX, labelY, isHighlighted);
+        if (this.showLabels) {
+            const labelT = transition.labelOffset || 0.5;
+            const labelX = (1-labelT)*(1-labelT)*startX + 2*(1-labelT)*labelT*controlX + labelT*labelT*endX;
+            const labelY = (1-labelT)*(1-labelT)*startY + 2*(1-labelT)*labelT*controlY + labelT*labelT*endY;
+            
+            this.drawTransitionLabel(transition.symbol, labelX, labelY, isHighlighted);
+        }
     }
     
-    drawStraightTransition(startX, startY, endX, endY, dx, dy, symbol, isHighlighted) {
+    drawParallelTransition(startX, startY, endX, endY, unitX, unitY, transition, from, to, isHighlighted) {
+        // Get transitions in the same direction for proper parallel offset
+        const sameDirectionTransitions = this.transitions.filter(t => t.from.id === from.id && t.to.id === to.id);
+        const transitionIndex = sameDirectionTransitions.indexOf(transition);
+        
+        if (transitionIndex === -1) return;
+        
+        // Calculate perpendicular offset for parallel lines
+        const perpX = -unitY;
+        const perpY = unitX;
+        const offset = (transitionIndex - (sameDirectionTransitions.length - 1) / 2) * 20;
+        
+        const offsetStartX = startX + perpX * offset;
+        const offsetStartY = startY + perpY * offset;
+        const offsetEndX = endX + perpX * offset;
+        const offsetEndY = endY + perpY * offset;
+        
+        this.ctx.beginPath();
+        this.ctx.moveTo(offsetStartX, offsetStartY);
+        this.ctx.lineTo(offsetEndX, offsetEndY);
+        this.ctx.stroke();
+        
+        const arrowAngle = Math.atan2(offsetEndY - offsetStartY, offsetEndX - offsetStartX);
+        this.drawArrowhead(offsetEndX, offsetEndY, arrowAngle, isHighlighted);
+        
+        // Draw label at specified offset along the line
+        if (this.showLabels) {
+            const t = transition.labelOffset || 0.5;
+            const labelX = offsetStartX + (offsetEndX - offsetStartX) * t;
+            const labelY = offsetStartY + (offsetEndY - offsetStartY) * t;
+            this.drawTransitionLabel(transition.symbol, labelX, labelY, isHighlighted);
+        }
+    }
+    
+    drawStraightTransition(startX, startY, endX, endY, dx, dy, transition, isHighlighted) {
         this.ctx.beginPath();
         this.ctx.moveTo(startX, startY);
         this.ctx.lineTo(endX, endY);
@@ -768,9 +1064,12 @@ class DFASimulator {
         const arrowAngle = Math.atan2(dy, dx);
         this.drawArrowhead(endX, endY, arrowAngle, isHighlighted);
         
-        const midX = (startX + endX) / 2;
-        const midY = (startY + endY) / 2;
-        this.drawTransitionLabel(symbol, midX, midY, isHighlighted);
+        if (this.showLabels) {
+            const t = transition.labelOffset || 0.5;
+            const labelX = startX + (endX - startX) * t;
+            const labelY = startY + (endY - startY) * t;
+            this.drawTransitionLabel(transition.symbol, labelX, labelY, isHighlighted);
+        }
     }
     
     drawArrowhead(x, y, angle, isHighlighted) {
@@ -792,6 +1091,8 @@ class DFASimulator {
     }
     
     drawTransitionLabel(text, x, y, isHighlighted) {
+        if (!this.showLabels) return;
+        
         this.ctx.font = '14px Kalam, Comic Sans MS, cursive';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
@@ -813,20 +1114,12 @@ class DFASimulator {
     }
     
     drawSelfLoop(state, transition, isSelected, isHovered, isDebugTransition) {
-        // Get all self-loops for this state to space them properly
-        const selfLoops = this.transitions.filter(t => t.from.id === state.id && t.to.id === state.id);
-        const loopIndex = selfLoops.indexOf(transition);
-        
-        if (loopIndex === -1) return;
-        
         const radius = 30;
         const loopRadius = 25;
         const loopDistance = 55;
         
-        // Space multiple self-loops around the state
-        const baseAngle = -Math.PI/2; // Start at top
-        const angleOffset = Math.PI/6; // 30 degrees between loops
-        const angle = baseAngle + (loopIndex * angleOffset);
+        // Use stored angle or default to top
+        const angle = transition.selfLoopAngle || -Math.PI/2;
         
         const loopCenterX = state.x + Math.cos(angle) * loopDistance;
         const loopCenterY = state.y + Math.sin(angle) * loopDistance;
@@ -874,9 +1167,11 @@ class DFASimulator {
         this.drawArrowhead(stateExitX, stateExitY, arrowAngle, isSelected || isHovered || isDebugTransition);
         
         // Label
-        const labelX = loopCenterX + Math.cos(angle) * (loopRadius + 20);
-        const labelY = loopCenterY + Math.sin(angle) * (loopRadius + 20);
-        this.drawTransitionLabel(transition.symbol, labelX, labelY, isSelected || isHovered || isDebugTransition);
+        if (this.showLabels) {
+            const labelX = loopCenterX + Math.cos(angle) * (loopRadius + 20);
+            const labelY = loopCenterY + Math.sin(angle) * (loopRadius + 20);
+            this.drawTransitionLabel(transition.symbol, labelX, labelY, isSelected || isHovered || isDebugTransition);
+        }
     }
 }
 
@@ -915,6 +1210,18 @@ function clearAll() {
     simulator.clearAll();
 }
 
+function confirmDelete() {
+    simulator.confirmDelete();
+}
+
+function confirmClearAll() {
+    simulator.confirmClearAll();
+}
+
+function toggleLabels() {
+    simulator.toggleLabels();
+}
+
 function testString() {
     simulator.testString();
 }
@@ -941,6 +1248,16 @@ function switchTab(tab) {
     
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
     document.getElementById(tab + '-test').classList.add('active');
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+function scrollToInstructions() {
+    document.getElementById('instructions').scrollIntoView({
+        behavior: 'smooth'
+    });
 }
 
 function runBulkTest() {
@@ -1042,4 +1359,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // Close modals when clicking outside
+    window.addEventListener('click', (event) => {
+        const deleteModal = document.getElementById('deleteModal');
+        const clearModal = document.getElementById('clearModal');
+        
+        if (event.target === deleteModal) {
+            deleteModal.style.display = 'none';
+        }
+        if (event.target === clearModal) {
+            clearModal.style.display = 'none';
+        }
+    });
 });

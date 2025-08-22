@@ -12,8 +12,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Mobile DFA Simulator</h1>
-            <p>Create and test deterministic finite automata</p>
+            <h1>DFA Simulator</h1>
+            <p>Create and Test Deterministic Finite Automata</p>
             <p>Developer: Gene Apiladas</p>
         </div>
         
@@ -25,6 +25,10 @@
             <button class="btn btn-success" onclick="toggleFinalState()">Toggle Final</button>
             <button class="btn btn-danger" onclick="deleteSelected()">Delete</button>
             <button class="btn btn-danger" onclick="clearAll()">Clear All</button>
+            <div class="toggle-container">
+                <span>Show Labels:</span>
+                <div class="toggle-btn active" onclick="toggleLabels()" id="labelToggle"></div>
+            </div>
         </div>
         
         <div class="canvas-container">
@@ -78,7 +82,7 @@
             </div>
         </div>
         
-        <div class="instructions">
+        <div class="instructions" id="instructions">
             <h3>How to use:</h3>
             <ul>
                 <li><strong>Add State:</strong> Tap empty area to create states</li>
@@ -86,12 +90,39 @@
                 <li><strong>Move:</strong> Drag states to reposition them</li>
                 <li><strong>Rename State:</strong> Double-click a state to change its label</li>
                 <li><strong>Edit Transition:</strong> Double-click a transition to modify its symbol</li>
+                <li><strong>Move Self-loops:</strong> Drag self-loop transitions around the state</li>
+                <li><strong>Move Labels:</strong> Drag transition labels along their lines</li>
                 <li><strong>Set Start:</strong> Select a state and tap "Set Start"</li>
                 <li><strong>Toggle Final:</strong> Select a state to make it accepting</li>
                 <li><strong>Single Test:</strong> Enter a string and see if it's accepted</li>
                 <li><strong>Step Debug:</strong> See the DFA execution step by step</li>
                 <li><strong>Bulk Test:</strong> Test multiple strings at once with expected results</li>
+                <li><strong>Show Labels:</strong> Toggle visibility of transition symbols</li>
             </ul>
+        </div>
+    </div>
+
+    <button class="help-button" onclick="scrollToInstructions()">?</button>
+
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <h3>Confirm Delete</h3>
+            <p>Are you sure you want to delete the selected item?</p>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeModal('deleteModal')">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="clearModal" class="modal">
+        <div class="modal-content">
+            <h3>Clear All</h3>
+            <p>Are you sure you want to clear all states and transitions? This action cannot be undone.</p>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeModal('clearModal')">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmClearAll()">Clear All</button>
+            </div>
         </div>
     </div>
     
