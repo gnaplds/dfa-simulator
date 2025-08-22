@@ -269,6 +269,18 @@ class DFASimulator {
                     return;
                 }
             } else {
+                // Enforce DFA rule: no duplicate symbol from the same state
+                for (let symbol of symbols) {
+                    const duplicate = this.transitions.find(t => 
+                        t.from.id === from.id && 
+                        t.symbol.split(',').map(s => s.trim()).includes(symbol)
+                    );
+                    if (duplicate) {
+                        alert(`DFA rule violation: State '${from.label}' already has a transition for symbol '${symbol}'!`);
+                        return;
+                    }
+                }
+
                 // Create new transition
                 const transition = {
                     id: Date.now() + Math.random(),
@@ -289,10 +301,10 @@ class DFASimulator {
                     
                     if (reverseTransition) {
                         // Make both transitions offset with better spacing
-                        transition.offset = -10; // Offset distance
+                        transition.offset = -10;
                         reverseTransition.offset = 10;
-                        transition.offsetDirection = 1; // Right side
-                        reverseTransition.offsetDirection = -1; // Left side
+                        transition.offsetDirection = 1;
+                        reverseTransition.offsetDirection = -1;
                     } else {
                         transition.labelOffset = 0.5; // Default to middle of transition
                     }
@@ -963,7 +975,7 @@ class DFASimulator {
         } else if (state === this.selectedState) {
             this.ctx.fillStyle = '#007bff';
         } else if (state === this.startState) {
-            this.ctx.fillStyle = '#28a745';
+            this.ctx.fillStyle = '#f8f9fa';
         } else if (isHovered && this.mode === 'move') {
             this.ctx.fillStyle = '#e3f2fd'; // Light hover color
         } else {
@@ -987,20 +999,20 @@ class DFASimulator {
         
         // Start state arrow
         if (state === this.startState) {
-            this.ctx.strokeStyle = '#28a745';
+            this.ctx.strokeStyle = '#2c3e50';
             this.ctx.lineWidth = 4;
             this.ctx.beginPath();
             
             const startX = state.x - 75;
-            const endX = state.x - 40;
+            const endX = state.x - 36;
             const y = state.y;
             
             this.ctx.moveTo(startX, y);
             this.ctx.lineTo(endX, y);
             
-            this.ctx.moveTo(endX - 8, y - 5);
+            this.ctx.moveTo(endX - 12, y - 10);
             this.ctx.lineTo(endX, y);
-            this.ctx.lineTo(endX - 8, y + 5);
+            this.ctx.lineTo(endX - 12, y + 10);
             this.ctx.stroke();
         }
         
@@ -1211,7 +1223,7 @@ class DFASimulator {
         this.ctx.stroke();
         
         // Calculate arrow position offset to the right
-        const arrowOffset = 22;
+        const arrowOffset = 21.6;
         const perpAngle = angle + Math.PI * 0.8;
         
         const arrowX = loopCenterX + Math.cos(perpAngle) * arrowOffset;
@@ -1223,7 +1235,7 @@ class DFASimulator {
         
         // Draw label
         if (this.showLabels) {
-            const labelDistance = 60;
+            const labelDistance = 69;
             const labelX = state.x + Math.cos(angle) * labelDistance;
             const labelY = state.y + Math.sin(angle) * labelDistance;
             this.drawTransitionLabel(transition.symbol, labelX, labelY, isSelected || isHovered || isDebugTransition);
