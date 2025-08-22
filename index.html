@@ -14,7 +14,6 @@
         <div class="header">
             <h1>DFA Simulator</h1>
             <p>Create and Test Deterministic Finite Automata</p>
-            <p>Developer: Gene Apiladas</p>
         </div>
         
         <div class="controls">
@@ -87,11 +86,11 @@
             <ul>
                 <li><strong>Add State:</strong> Tap empty area to create states</li>
                 <li><strong>Add Transition:</strong> Tap source state, then target state, enter symbol</li>
-                <li><strong>Move:</strong> Drag states to reposition them</li>
+                <li><strong>Move:</strong> Hover over states or transition labels to move them</li>
                 <li><strong>Rename State:</strong> Double-click a state to change its label</li>
                 <li><strong>Edit Transition:</strong> Double-click a transition to modify its symbol</li>
                 <li><strong>Move Self-loops:</strong> Drag self-loop transitions around the state</li>
-                <li><strong>Move Labels:</strong> Drag transition labels along their lines</li>
+                <li><strong>Move Labels:</strong> Hover over transition labels to move them</li>
                 <li><strong>Set Start:</strong> Select a state and tap "Set Start"</li>
                 <li><strong>Toggle Final:</strong> Select a state to make it accepting</li>
                 <li><strong>Single Test:</strong> Enter a string and see if it's accepted</li>
@@ -100,10 +99,15 @@
                 <li><strong>Show Labels:</strong> Toggle visibility of transition symbols</li>
             </ul>
         </div>
+        
+        <div class="developer-info">
+            <p>Developed by Gene Apiladas</p>
+        </div>
     </div>
 
     <button class="help-button" onclick="scrollToInstructions()">?</button>
 
+    <!-- Modals -->
     <div id="deleteModal" class="modal">
         <div class="modal-content">
             <h3>Confirm Delete</h3>
@@ -122,6 +126,28 @@
             <div class="modal-buttons">
                 <button class="btn btn-secondary" onclick="closeModal('clearModal')">Cancel</button>
                 <button class="btn btn-danger" onclick="confirmClearAll()">Clear All</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="renameModal" class="modal">
+        <div class="modal-content">
+            <h3>Rename State</h3>
+            <input type="text" id="renameInput" class="modal-input" placeholder="Enter new state name">
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeModal('renameModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmRename()">Rename</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="transitionModal" class="modal">
+        <div class="modal-content">
+            <h3>Transition Symbol</h3>
+            <input type="text" id="transitionInput" class="modal-input" placeholder="Enter transition symbols (e.g., a,b,c)" maxlength="50">
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeModal('transitionModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmTransition()">Add</button>
             </div>
         </div>
     </div>
