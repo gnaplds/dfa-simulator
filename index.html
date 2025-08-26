@@ -1,13 +1,10 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DFA Simulator</title>
-
     <link rel="stylesheet" href="style.css">
-
 </head>
 <body>
     <div class="container">
@@ -157,8 +154,41 @@
             </div>
         </div>
     </div>
+
+    <!-- Firebase Configuration -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+        import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyB8njzp7NwaJ9LAVH7HlDLliYEsuD4jPik",
+            authDomain: "dfa-simulator.firebaseapp.com",
+            projectId: "dfa-simulator",
+            storageBucket: "dfa-simulator.firebasestorage.app",
+            messagingSenderId: "899058386712",
+            appId: "1:899058386712:web:076ac7bb13405f4e25806d",
+            measurementId: "G-ML0BFQP24B"
+        };
+
+        // Initialize Firebase
+        try {
+            const app = initializeApp(firebaseConfig);
+            const db = getFirestore(app);
+            
+            // Make Firebase functions available globally
+            window.firebaseDb = db;
+            window.firebaseDoc = doc;
+            window.firebaseSetDoc = setDoc;
+            window.firebaseGetDoc = getDoc;
+            window.firebaseConfigured = true;
+            
+            console.log('Firebase initialized successfully');
+        } catch (error) {
+            console.warn('Firebase initialization failed:', error);
+            window.firebaseConfigured = false;
+        }
+    </script>
     
     <script src="script.js"></script>
-
 </body>
 </html>

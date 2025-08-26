@@ -1408,133 +1408,6 @@ function toggleTheme() {
     }
 }
 
-// DFA URL encoding/decoding functions
-function encodeDFAToURL() {
-    if (simulator.states.length === 0) {
-        alert('Please create some states first!');
-        return;
-    }
-    
-    const dfaData = {
-        states: simulator.states.map(state => ({
-            id: state.id,
-            x: Math.round(state.x),
-            y: Math.round(state.y),
-            isFinal: state.isFinal,
-            label: state.label
-        })),
-        transitions: simulator.transitions.map(transition => ({
-            fromId: transition.from.id,
-            toId: transition.to.id,
-            symbol: transition.symbol,
-            offset: transition.offset || 0,
-            offsetDirection: transition.offsetDirection || 0,
-            labelOffset: transition.labelOffset || 0.5,
-            selfLoopAngle: transition.selfLoopAngle || -Math.PI/2
-        })),
-        startStateId: simulator.startState ? simulator.startState.id : null,
-        stateCounter: simulator.stateCounter
-    };
-    
-    try {
-        const jsonString = JSON.stringify(dfaData);
-        const encodedData = encodeURIComponent(jsonString);
-        const currentURL = window.location.href.split('?')[0];
-        const shareURL = `${currentURL}?dfa=${encodedData}`;
-        
-        // Copy to clipboard
-        navigator.clipboard.writeText(shareURL).then(() => {
-            showNotification('DFA link copied to clipboard! 📋', 'success');
-        }).catch(err => {
-            // Fallback for older browsers
-            const textArea = document.createElement('textarea');
-            textArea.value = shareURL;
-            document.body.appendChild(textArea);
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-            showNotification('DFA link copied to clipboard! 📋', 'success');
-        });
-        
-    } catch (error) {
-        console.error('Error encoding DFA:', error);
-        alert('Error creating shareable link. DFA might be too complex.');
-    }
-}
-
-function loadDFAFromURL() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const encodedDFA = urlParams.get('dfa');
-    
-    if (!encodedDFA) return;
-    
-    try {
-        const jsonString = decodeURIComponent(encodedDFA);
-        const dfaData = JSON.parse(jsonString);
-        
-        // Clear current DFA
-        simulator.states = [];
-        simulator.transitions = [];
-        simulator.selectedState = null;
-        simulator.selectedTransition = null;
-        simulator.startState = null;
-        simulator.transitionSource = null;
-        simulator.resetDebug();
-        
-        // Restore states
-        const stateMap = new Map();
-        dfaData.states.forEach(stateData => {
-            const state = {
-                id: stateData.id,
-                x: stateData.x,
-                y: stateData.y,
-                isFinal: stateData.isFinal,
-                label: stateData.label
-            };
-            simulator.states.push(state);
-            stateMap.set(stateData.id, state);
-        });
-        
-        // Restore transitions
-        dfaData.transitions.forEach(transitionData => {
-            const fromState = stateMap.get(transitionData.fromId);
-            const toState = stateMap.get(transitionData.toId);
-            
-            if (fromState && toState) {
-                const transition = {
-                    id: Date.now() + Math.random(),
-                    from: fromState,
-                    to: toState,
-                    symbol: transitionData.symbol,
-                    offset: transitionData.offset,
-                    offsetDirection: transitionData.offsetDirection,
-                    labelOffset: transitionData.labelOffset,
-                    selfLoopAngle: transitionData.selfLoopAngle
-                };
-                simulator.transitions.push(transition);
-            }
-        });
-        
-        // Restore start state
-        if (dfaData.startStateId !== null) {
-            simulator.startState = stateMap.get(dfaData.startStateId);
-        }
-        
-        // Restore counter
-        simulator.stateCounter = dfaData.stateCounter || simulator.states.length;
-        
-        simulator.draw();
-        showNotification('DFA loaded from URL! 🎉', 'success');
-        
-        // Clean URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-        
-    } catch (error) {
-        console.error('Error loading DFA from URL:', error);
-        showNotification('Error loading DFA from URL. Link may be corrupted.', 'error');
-    }
-}
-
 function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
@@ -1714,3 +1587,481 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+// Firebase and URL management for DFA Simulator
+// Improved version with better error handling, security, and maintainability
+
+class DFADataManager {
+    constructor() {
+        this.lastShareTime = 0;
+        this.SHARE_COOLDOWN = 3000; // 3 seconds between shares
+        this.MAX_DFA_SIZE = 25000; // Reduced from 50KB
+        this.MAX_RETRIES = 3;
+        this.ID_LENGTH = 8; // Increased from 6 for better collision resistance
+    }
+
+    // Generate cryptographically secure unique ID
+    generateShortId() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        const array = new Uint8Array(this.ID_LENGTH);
+        crypto.getRandomValues(array);
+        
+        for (let i = 0; i < this.ID_LENGTH; i++) {
+            result += chars.charAt(array[i] % chars.length);
+        }
+        return result;
+    }
+
+    // Check if Firebase is properly configured
+    isFirebaseAvailable() {
+        return !!(window.firebaseDb && window.firebaseDoc && 
+                 window.firebaseSetDoc && window.firebaseGetDoc);
+    }
+
+    // Generate unique ID with collision detection
+    async generateUniqueShortId() {
+        if (!this.isFirebaseAvailable()) {
+            throw new Error('Firebase not available');
+        }
+
+        for (let attempt = 0; attempt < this.MAX_RETRIES; attempt++) {
+            const shortId = this.generateShortId();
+            
+            try {
+                const docRef = window.firebaseDoc(window.firebaseDb, 'dfas', shortId);
+                const docSnap = await window.firebaseGetDoc(docRef);
+                
+                if (!docSnap.exists()) {
+                    return shortId;
+                }
+            } catch (error) {
+                console.warn(`Attempt ${attempt + 1} failed:`, error);
+                if (attempt === this.MAX_RETRIES - 1) throw error;
+            }
+        }
+        throw new Error('Could not generate unique ID after multiple attempts');
+    }
+
+    // Sanitize user input data
+    sanitizeString(str, maxLength = 50) {
+        if (typeof str !== 'string') return '';
+        return str.slice(0, maxLength)
+                 .replace(/[<>'"&]/g, '') // Remove potentially dangerous characters
+                 .trim();
+    }
+
+    // Validate DFA data structure
+    validateDFAData(dfaData) {
+        if (!dfaData || typeof dfaData !== 'object') {
+            throw new Error('Invalid DFA data structure');
+        }
+
+        if (!Array.isArray(dfaData.states)) {
+            throw new Error('States must be an array');
+        }
+
+        if (!Array.isArray(dfaData.transitions)) {
+            throw new Error('Transitions must be an array');
+        }
+
+        // Validate data size
+        const dataSize = JSON.stringify(dfaData).length;
+        if (dataSize > this.MAX_DFA_SIZE) {
+            throw new Error(`DFA too large (${dataSize} bytes, max ${this.MAX_DFA_SIZE})`);
+        }
+
+        // Validate states
+        dfaData.states.forEach((state, index) => {
+            if (typeof state.id !== 'number') {
+                throw new Error(`State ${index} has invalid ID`);
+            }
+            if (typeof state.x !== 'number' || typeof state.y !== 'number') {
+                throw new Error(`State ${index} has invalid coordinates`);
+            }
+        });
+
+        // Validate transitions
+        dfaData.transitions.forEach((transition, index) => {
+            if (typeof transition.fromId !== 'number' || typeof transition.toId !== 'number') {
+                throw new Error(`Transition ${index} has invalid state references`);
+            }
+            if (!transition.symbol || typeof transition.symbol !== 'string') {
+                throw new Error(`Transition ${index} has invalid symbol`);
+            }
+        });
+
+        return true;
+    }
+
+    // Sanitize loaded DFA data
+    sanitizeDFAData(dfaData) {
+        return {
+            states: dfaData.states.map(state => ({
+                id: parseInt(state.id) || 0,
+                x: Math.max(0, Math.min(2000, parseInt(state.x) || 100)), // Clamp coordinates
+                y: Math.max(0, Math.min(1000, parseInt(state.y) || 100)),
+                isFinal: Boolean(state.isFinal),
+                label: this.sanitizeString(state.label || `q${state.id}`, 20)
+            })),
+            transitions: dfaData.transitions.map(transition => ({
+                fromId: parseInt(transition.fromId) || 0,
+                toId: parseInt(transition.toId) || 0,
+                symbol: this.sanitizeString(transition.symbol || 'a', 10),
+                offset: Math.max(-50, Math.min(50, parseFloat(transition.offset) || 0)),
+                offsetDirection: Math.max(-1, Math.min(1, parseInt(transition.offsetDirection) || 0)),
+                labelOffset: Math.max(0, Math.min(1, parseFloat(transition.labelOffset) || 0.5)),
+                selfLoopAngle: parseFloat(transition.selfLoopAngle) || -Math.PI/2
+            })),
+            startStateId: transition.startStateId !== null ? parseInt(dfaData.startStateId) : null,
+            stateCounter: Math.max(0, parseInt(dfaData.stateCounter) || 0)
+        };
+    }
+
+    // Save DFA to Firebase with improved error handling
+    async saveDFAToFirebase(dfaData) {
+        if (!this.isFirebaseAvailable()) {
+            throw new Error('Firebase not available');
+        }
+
+        // Validate data before saving
+        this.validateDFAData(dfaData);
+
+        try {
+            const shortId = await this.generateUniqueShortId();
+            const docRef = window.firebaseDoc(window.firebaseDb, 'dfas', shortId);
+            
+            const documentData = {
+                dfaData: dfaData,
+                createdAt: new Date().toISOString(),
+                version: '1.1',
+                userAgent: navigator.userAgent.slice(0, 100) // Truncated for privacy
+            };
+
+            await window.firebaseSetDoc(docRef, documentData);
+            return shortId;
+
+        } catch (error) {
+            console.error('Firebase save failed:', error);
+            
+            // Provide user-friendly error messages
+            if (error.code === 'permission-denied') {
+                throw new Error('Access denied. Please try again later.');
+            } else if (error.code === 'unavailable') {
+                throw new Error('Service temporarily unavailable. Please try again.');
+            } else if (error.message.includes('quota')) {
+                throw new Error('Service temporarily at capacity. Please try again later.');
+            } else {
+                throw new Error('Failed to save DFA. Please try again.');
+            }
+        }
+    }
+
+    // Load DFA from Firebase with improved error handling
+    async loadDFAFromFirebase(shortId) {
+        if (!this.isFirebaseAvailable()) {
+            throw new Error('Firebase not configured');
+        }
+
+        // Validate shortId format
+        if (!/^[A-Za-z0-9]{6,10}$/.test(shortId)) {
+            throw new Error('Invalid link format');
+        }
+
+        try {
+            const docRef = window.firebaseDoc(window.firebaseDb, 'dfas', shortId);
+            const docSnap = await window.firebaseGetDoc(docRef);
+            
+            if (!docSnap.exists()) {
+                throw new Error('DFA not found. Link may be invalid or expired.');
+            }
+
+            const data = docSnap.data();
+            
+            // Validate document structure
+            if (!data.dfaData) {
+                throw new Error('Invalid document format');
+            }
+
+            // Sanitize data before loading
+            const sanitizedData = this.sanitizeDFAData(data.dfaData);
+            this.loadDFAFromData(sanitizedData);
+
+            return sanitizedData;
+
+        } catch (error) {
+            console.error('Error loading from Firebase:', error);
+            
+            if (error.message.includes('not found') || error.message.includes('expired')) {
+                throw error; // Re-throw user-friendly messages
+            } else if (error.code === 'permission-denied') {
+                throw new Error('Access denied');
+            } else {
+                throw new Error('Failed to load DFA from server');
+            }
+        }
+    }
+
+    // Unified DFA data loading function
+    loadDFAFromData(dfaData) {
+        try {
+            // Validate data structure
+            this.validateDFAData(dfaData);
+
+            // Clear current DFA
+            if (typeof simulator !== 'undefined') {
+                simulator.states = [];
+                simulator.transitions = [];
+                simulator.selectedState = null;
+                simulator.selectedTransition = null;
+                simulator.startState = null;
+                simulator.transitionSource = null;
+                if (typeof simulator.resetDebug === 'function') {
+                    simulator.resetDebug();
+                }
+            }
+
+            // Restore states
+            const stateMap = new Map();
+            dfaData.states.forEach(stateData => {
+                const state = {
+                    id: stateData.id,
+                    x: stateData.x,
+                    y: stateData.y,
+                    isFinal: stateData.isFinal,
+                    label: stateData.label
+                };
+                simulator.states.push(state);
+                stateMap.set(stateData.id, state);
+            });
+
+            // Restore transitions with better ID generation
+            dfaData.transitions.forEach(transitionData => {
+                const fromState = stateMap.get(transitionData.fromId);
+                const toState = stateMap.get(transitionData.toId);
+                
+                if (fromState && toState) {
+                    const transition = {
+                        id: crypto.getRandomValues(new Uint32Array(1))[0], // Better ID generation
+                        from: fromState,
+                        to: toState,
+                        symbol: transitionData.symbol,
+                        offset: transitionData.offset,
+                        offsetDirection: transitionData.offsetDirection,
+                        labelOffset: transitionData.labelOffset,
+                        selfLoopAngle: transitionData.selfLoopAngle
+                    };
+                    simulator.transitions.push(transition);
+                } else {
+                    console.warn('Skipping transition with invalid state references:', transitionData);
+                }
+            });
+
+            // Restore start state
+            if (dfaData.startStateId !== null && dfaData.startStateId !== undefined) {
+                simulator.startState = stateMap.get(dfaData.startStateId);
+                if (!simulator.startState) {
+                    console.warn('Start state not found, clearing start state reference');
+                }
+            }
+
+            // Restore counter
+            simulator.stateCounter = Math.max(dfaData.stateCounter || 0, simulator.states.length);
+
+            if (typeof simulator.draw === 'function') {
+                simulator.draw();
+            }
+
+        } catch (error) {
+            console.error('Error loading DFA data:', error);
+            throw new Error(`Failed to load DFA: ${error.message}`);
+        }
+    }
+
+    // Enhanced URL encoding with rate limiting
+    async encodeDFAToURL() {
+        // Rate limiting
+        const now = Date.now();
+        if (now - this.lastShareTime < this.SHARE_COOLDOWN) {
+            const remainingTime = Math.ceil((this.SHARE_COOLDOWN - (now - this.lastShareTime)) / 1000);
+            throw new Error(`Please wait ${remainingTime} seconds before sharing again`);
+        }
+
+        if (!simulator || !simulator.states || simulator.states.length === 0) {
+            throw new Error('Please create some states first');
+        }
+
+        this.lastShareTime = now;
+
+        const dfaData = {
+            states: simulator.states.map(state => ({
+                id: state.id,
+                x: Math.round(state.x),
+                y: Math.round(state.y),
+                isFinal: state.isFinal,
+                label: state.label
+            })),
+            transitions: simulator.transitions.map(transition => ({
+                fromId: transition.from.id,
+                toId: transition.to.id,
+                symbol: transition.symbol,
+                offset: transition.offset || 0,
+                offsetDirection: transition.offsetDirection || 0,
+                labelOffset: transition.labelOffset || 0.5,
+                selfLoopAngle: transition.selfLoopAngle || -Math.PI/2
+            })),
+            startStateId: simulator.startState ? simulator.startState.id : null,
+            stateCounter: simulator.stateCounter
+        };
+
+        try {
+            // Try Firebase first if available
+            if (this.isFirebaseAvailable()) {
+                try {
+                    const shortId = await this.saveDFAToFirebase(dfaData);
+                    const currentURL = window.location.href.split('?')[0];
+                    const shareURL = `${currentURL}?id=${shortId}`;
+                    
+                    await this.copyToClipboard(shareURL);
+                    return { success: true, url: shareURL, type: 'firebase' };
+                } catch (firebaseError) {
+                    console.warn('Firebase failed, falling back to direct encoding:', firebaseError);
+                    // Continue to fallback method
+                }
+            }
+
+            // Fallback to direct URL encoding
+            const jsonString = JSON.stringify(dfaData);
+            
+            // Use base64url encoding (URL-safe)
+            const encodedData = btoa(jsonString)
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+            
+            const currentURL = window.location.href.split('?')[0];
+            const shareURL = `${currentURL}?dfa=${encodedData}`;
+            
+            // Check URL length
+            if (shareURL.length > 2000) {
+                throw new Error('DFA too complex for direct URL sharing');
+            }
+            
+            await this.copyToClipboard(shareURL);
+            return { success: true, url: shareURL, type: 'direct' };
+
+        } catch (error) {
+            console.error('Error creating shareable link:', error);
+            throw new Error(`Failed to create shareable link: ${error.message}`);
+        }
+    }
+
+    // Enhanced clipboard function
+    async copyToClipboard(text) {
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                // Fallback for older browsers or non-secure contexts
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.opacity = '0';
+                textArea.style.pointerEvents = 'none';
+                document.body.appendChild(textArea);
+                textArea.select();
+                
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                if (!successful) {
+                    throw new Error('Copy command failed');
+                }
+            }
+        } catch (error) {
+            console.error('Failed to copy to clipboard:', error);
+            throw new Error('Failed to copy to clipboard');
+        }
+    }
+
+    // Enhanced URL loading with better error handling
+    loadDFAFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const encodedDFA = urlParams.get('dfa');
+        const shortId = urlParams.get('id');
+        
+        // Handle Firebase short URLs
+        if (shortId) {
+            this.loadDFAFromFirebase(shortId)
+                .then(() => {
+                    showNotification('DFA loaded successfully!', 'success');
+                })
+                .catch(error => {
+                    console.error('Failed to load DFA:', error);
+                    showNotification(error.message, 'error');
+                })
+                .finally(() => {
+                    // Clean URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                });
+            return;
+        }
+
+        // Handle direct encoded URLs
+        if (!encodedDFA) return;
+
+        try {
+            // Handle both regular base64 and base64url encoding
+            let jsonString;
+            try {
+                jsonString = atob(encodedDFA.replace(/-/g, '+').replace(/_/g, '/'));
+            } catch {
+                // Try without replacement for backward compatibility
+                jsonString = atob(encodedDFA);
+            }
+
+            const dfaData = JSON.parse(jsonString);
+            const sanitizedData = this.sanitizeDFAData(dfaData);
+            
+            this.loadDFAFromData(sanitizedData);
+            showNotification('DFA loaded successfully!', 'success');
+
+        } catch (error) {
+            console.error('Error loading DFA from URL:', error);
+            showNotification('Invalid or corrupted DFA link', 'error');
+        } finally {
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    }
+}
+
+// Initialize the data manager
+const dfaDataManager = new DFADataManager();
+
+// Global functions for backward compatibility
+async function encodeDFAToURL() {
+    try {
+        showNotification('Creating shareable link...', 'info');
+        const result = await dfaDataManager.encodeDFAToURL();
+        
+        const message = result.type === 'firebase' 
+            ? 'Short link copied to clipboard!' 
+            : 'Link copied to clipboard!';
+        showNotification(message, 'success');
+        
+    } catch (error) {
+        console.error('Share failed:', error);
+        showNotification(error.message, 'error');
+    }
+}
+
+function loadDFAFromURL() {
+    dfaDataManager.loadDFAFromURL();
+}
+
+// Utility function for notifications (assuming it exists in your main script)
+function showNotification(message, type = 'info') {
+    // This should match your existing notification system
+    console.log(`[${type.toUpperCase()}] ${message}`);
+}
