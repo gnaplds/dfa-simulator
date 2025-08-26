@@ -1408,6 +1408,182 @@ function toggleTheme() {
     }
 }
 
+// DFA URL encoding/decoding functions
+function encodeDFAToURL() {
+    if (simulator.states.length === 0) {
+        alert('Please create some states first!');
+        return;
+    }
+    
+    const dfaData = {
+        states: simulator.states.map(state => ({
+            id: state.id,
+            x: Math.round(state.x),
+            y: Math.round(state.y),
+            isFinal: state.isFinal,
+            label: state.label
+        })),
+        transitions: simulator.transitions.map(transition => ({
+            fromId: transition.from.id,
+            toId: transition.to.id,
+            symbol: transition.symbol,
+            offset: transition.offset || 0,
+            offsetDirection: transition.offsetDirection || 0,
+            labelOffset: transition.labelOffset || 0.5,
+            selfLoopAngle: transition.selfLoopAngle || -Math.PI/2
+        })),
+        startStateId: simulator.startState ? simulator.startState.id : null,
+        stateCounter: simulator.stateCounter
+    };
+    
+    try {
+        const jsonString = JSON.stringify(dfaData);
+        const encodedData = btoa(jsonString);
+        const currentURL = window.location.href.split('?')[0];
+        const shareURL = `${currentURL}?dfa=${encodedData}`;
+        
+        // Copy to clipboard
+        navigator.clipboard.writeText(shareURL).then(() => {
+            showNotification('DFA link copied to clipboard! 📋', 'success');
+        }).catch(err => {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = shareURL;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showNotification('DFA link copied to clipboard! 📋', 'success');
+        });
+        
+    } catch (error) {
+        console.error('Error encoding DFA:', error);
+        alert('Error creating shareable link. DFA might be too complex.');
+    }
+}
+
+function loadDFAFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const encodedDFA = urlParams.get('dfa');
+    
+    if (!encodedDFA) return;
+    
+    try {
+        const jsonString = atob(encodedDFA);
+        const dfaData = JSON.parse(jsonString);
+        
+        // Clear current DFA
+        simulator.states = [];
+        simulator.transitions = [];
+        simulator.selectedState = null;
+        simulator.selectedTransition = null;
+        simulator.startState = null;
+        simulator.transitionSource = null;
+        simulator.resetDebug();
+        
+        // Restore states
+        const stateMap = new Map();
+        dfaData.states.forEach(stateData => {
+            const state = {
+                id: stateData.id,
+                x: stateData.x,
+                y: stateData.y,
+                isFinal: stateData.isFinal,
+                label: stateData.label
+            };
+            simulator.states.push(state);
+            stateMap.set(stateData.id, state);
+        });
+        
+        // Restore transitions
+        dfaData.transitions.forEach(transitionData => {
+            const fromState = stateMap.get(transitionData.fromId);
+            const toState = stateMap.get(transitionData.toId);
+            
+            if (fromState && toState) {
+                const transition = {
+                    id: Date.now() + Math.random(),
+                    from: fromState,
+                    to: toState,
+                    symbol: transitionData.symbol,
+                    offset: transitionData.offset,
+                    offsetDirection: transitionData.offsetDirection,
+                    labelOffset: transitionData.labelOffset,
+                    selfLoopAngle: transitionData.selfLoopAngle
+                };
+                simulator.transitions.push(transition);
+            }
+        });
+        
+        // Restore start state
+        if (dfaData.startStateId !== null) {
+            simulator.startState = stateMap.get(dfaData.startStateId);
+        }
+        
+        // Restore counter
+        simulator.stateCounter = dfaData.stateCounter || simulator.states.length;
+        
+        simulator.draw();
+        showNotification('DFA loaded from URL! 🎉', 'success');
+        
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+    } catch (error) {
+        console.error('Error loading DFA from URL:', error);
+        showNotification('Error loading DFA from URL. Link may be corrupted.', 'error');
+    }
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    
+    // Style the notification
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        z-index: 10000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+        transform: translateX(400px);
+        opacity: 0;
+    `;
+    
+    if (type === 'success') {
+        notification.style.background = 'linear-gradient(135deg, #98C379, #50a14f)';
+    } else if (type === 'error') {
+        notification.style.background = 'linear-gradient(135deg, #E06C75, #e45649)';
+    } else {
+        notification.style.background = 'linear-gradient(135deg, #56b6c2, #0184bc)';
+    }
+    
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.style.transform = 'translateX(0)';
+        notification.style.opacity = '1';
+    }, 100);
+    
+    // Animate out and remove
+    setTimeout(() => {
+        notification.style.transform = 'translateX(400px)';
+        notification.style.opacity = '0';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
 // Initialize theme from localStorage
 function initializeTheme() {
     const savedTheme = localStorage.getItem('theme');
