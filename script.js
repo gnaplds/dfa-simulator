@@ -1561,36 +1561,7 @@ function displayBulkResults(results, passed, total) {
     resultsDiv.innerHTML = html;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    initializeTheme();
-    loadDFAFromURL();
-
-    const testInput = document.getElementById('testInput');
-    if (testInput) {
-        testInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                testString();
-            }
-        });
-    }
-
-    // Close modals when clicking outside
-    window.addEventListener('click', (event) => {
-        const deleteModal = document.getElementById('deleteModal');
-        const clearModal = document.getElementById('clearModal');
-        
-        if (event.target === deleteModal) {
-            deleteModal.style.display = 'none';
-        }
-        if (event.target === clearModal) {
-            clearModal.style.display = 'none';
-        }
-    });
-});
-
 // Firebase and URL management for DFA Simulator
-// Improved version with better error handling, security, and maintainability
-
 class DFADataManager {
     constructor() {
         this.lastShareTime = 0;
@@ -2060,8 +2031,33 @@ function loadDFAFromURL() {
     dfaDataManager.loadDFAFromURL();
 }
 
-// Utility function for notifications (assuming it exists in your main script)
-function showNotification(message, type = 'info') {
-    // This should match your existing notification system
+function showNotification(message, type = 'info') {\
     console.log(`[${type.toUpperCase()}] ${message}`);
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    initializeTheme();
+    loadDFAFromURL();
+
+    const testInput = document.getElementById('testInput');
+    if (testInput) {
+        testInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                testString();
+            }
+        });
+    }
+
+    // Close modals when clicking outside
+    window.addEventListener('click', (event) => {
+        const deleteModal = document.getElementById('deleteModal');
+        const clearModal = document.getElementById('clearModal');
+        
+        if (event.target === deleteModal) {
+            deleteModal.style.display = 'none';
+        }
+        if (event.target === clearModal) {
+            clearModal.style.display = 'none';
+        }
+    });
+});

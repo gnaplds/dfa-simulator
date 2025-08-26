@@ -143,7 +143,7 @@
             </div>
         </div>
     </div>
-
+    
     <div id="transitionModal" class="modal">
         <div class="modal-content">
             <h3>Transition Symbol</h3>
@@ -154,7 +154,14 @@
             </div>
         </div>
     </div>
-
+    
+    <!-- Scripts -->
+    <script src="utils.js"></script>
+    <script src="dataManager.js"></script>
+    <script src="baseAutomaton.js"></script>
+    <script src="dfaSimulator.js"></script>
+    <script src="main.js"></script>
+    
     <!-- Firebase Configuration -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
@@ -187,8 +194,7 @@
             console.warn('Firebase initialization failed:', error);
             window.firebaseConfigured = false;
         }
-    </script>
+        </script>
     
-    <script src="script.js"></script>
 </body>
 </html>
