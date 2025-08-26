@@ -1438,7 +1438,7 @@ function encodeDFAToURL() {
     
     try {
         const jsonString = JSON.stringify(dfaData);
-        const encodedData = btoa(jsonString);
+        const encodedData = encodeURIComponent(jsonString);
         const currentURL = window.location.href.split('?')[0];
         const shareURL = `${currentURL}?dfa=${encodedData}`;
         
@@ -1469,7 +1469,7 @@ function loadDFAFromURL() {
     if (!encodedDFA) return;
     
     try {
-        const jsonString = atob(encodedDFA);
+        const jsonString = decodeURIComponent(encodedDFA);
         const dfaData = JSON.parse(jsonString);
         
         // Clear current DFA
@@ -1690,6 +1690,7 @@ function displayBulkResults(results, passed, total) {
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeTheme();
+    loadDFAFromURL();
 
     const testInput = document.getElementById('testInput');
     if (testInput) {
